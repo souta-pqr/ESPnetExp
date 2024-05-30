@@ -55,18 +55,20 @@ def calculate_detection_rate(hyp_path, ref_path, output_path):
                 f_insertion_count = f_hyp_count - f_correct_count
                 d_insertion_count = d_hyp_count - d_correct_count
 
-                # Precision、Recallを計算
+                # Precision、Recall、F1スコアを計算
                 f_precision = f_correct_count / f_hyp_count * 100 if f_hyp_count > 0 else 0
                 d_precision = d_correct_count / d_hyp_count * 100 if d_hyp_count > 0 else 0
                 f_recall = f_correct_count / f_ref_count * 100 if f_ref_count > 0 else 0
                 d_recall = d_correct_count / d_ref_count * 100 if d_ref_count > 0 else 0
+                f_f1 = 2 * f_precision * f_recall / (f_precision + f_recall) if f_precision + f_recall > 0 else 0
+                d_f1 = 2 * d_precision * d_recall / (d_precision + d_recall) if d_precision + d_recall > 0 else 0
 
                 # 結果を出力ファイルに書き込む
                 out_file.write(f"{sentence_id}\n")
                 out_file.write(f"REF: {ref_sentence}")
                 out_file.write(f"HYP: {hyp_sentence}")
-                out_file.write(f"フィラーの検出率 - Precision: {f_precision:.2f}%, Recall: {f_recall:.2f}%\n")
-                out_file.write(f"言い直しの検出率 - Precision: {d_precision:.2f}%, Recall: {d_recall:.2f}%\n")
+                out_file.write(f"フィラーの検出率 - Precision: {f_precision:.2f}%, Recall: {f_recall:.2f}%, F1: {f_f1:.2f}%\n")
+                out_file.write(f"言い直しの検出率 - Precision: {d_precision:.2f}%, Recall: {d_recall:.2f}%, F1: {d_f1:.2f}%\n")
                 out_file.write(f"フィラーの脱落誤り数: {f_deletion_count}, 挿入誤り数: {f_insertion_count}\n")
                 out_file.write(f"言い直しの脱落誤り数: {d_deletion_count}, 挿入誤り数: {d_insertion_count}\n")
                 out_file.write("\n")
@@ -110,16 +112,18 @@ def calculate_detection_rate(hyp_path, ref_path, output_path):
 
                 i += 2
 
-            # テキスト全体でのFとDのPrecision、Recallを計算
+            # テキスト全体でのFとDのPrecision、Recall、F1スコアを計算
             total_f_precision = total_f_correct_count / total_f_hyp_count * 100 if total_f_hyp_count > 0 else 0
             total_d_precision = total_d_correct_count / total_d_hyp_count * 100 if total_d_hyp_count > 0 else 0
             total_f_recall = total_f_correct_count / total_f_ref_count * 100 if total_f_ref_count > 0 else 0
             total_d_recall = total_d_correct_count / total_d_ref_count * 100 if total_d_ref_count > 0 else 0
+            total_f_f1 = 2 * total_f_precision * total_f_recall / (total_f_precision + total_f_recall) if total_f_precision + total_f_recall > 0 else 0
+            total_d_f1 = 2 * total_d_precision * total_d_recall / (total_d_precision + total_d_recall) if total_d_precision + total_d_recall > 0 else 0
 
             # テキスト全体の検出率を出力ファイルに書き込む
             out_file.write("テキスト全体での検出率:\n")
-            out_file.write(f"フィラーの検出率 - Precision: {total_f_precision:.2f}%, Recall: {total_f_recall:.2f}%\n")
-            out_file.write(f"言い直しの検出率 - Precision: {total_d_precision:.2f}%, Recall: {total_d_recall:.2f}%\n")
+            out_file.write(f"フィラーの検出率 - Precision: {total_f_precision:.2f}%, Recall: {total_f_recall:.2f}%, F1: {total_f_f1:.2f}%\n")
+            out_file.write(f"言い直しの検出率 - Precision: {total_d_precision:.2f}%, Recall: {total_d_recall:.2f}%, F1: {total_d_f1:.2f}%\n")
             out_file.write(f"フィラーの脱落誤り数: {total_f_deletion_count}, 挿入誤り数: {total_f_insertion_count}\n")
             out_file.write(f"言い直しの脱落誤り数: {total_d_deletion_count}, 挿入誤り数: {total_d_insertion_count}\n")
 
