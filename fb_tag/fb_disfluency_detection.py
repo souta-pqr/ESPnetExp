@@ -161,6 +161,7 @@ def calculate_detection_rate(text1_path, text2_path, output_path):
 
             # テキスト全体の検出率を出力ファイルに書き込む
             out_file.write("テキスト全体での検出率:\n")
+            out_file.write(f"フィラーの総数: {total_filler_ref_count}, 言い直しの総数: {total_disfluency_ref_count}\n")
             out_file.write(f"フィラーの検出率 - Precision: {total_filler_precision:.2f}%, Recall: {total_filler_recall:.2f}%, F1: {total_filler_f1:.2f}%\n")
             out_file.write(f"言い直しの検出率 - Precision: {total_disfluency_precision:.2f}%, Recall: {total_disfluency_recall:.2f}%, F1: {total_disfluency_f1:.2f}%\n")
             out_file.write(f"フィラーの検出率 (緩和) - Precision: {total_filler_precision_relaxed:.2f}%, Recall: {total_filler_recall_relaxed:.2f}%, F1: {total_filler_f1_relaxed:.2f}%\n")
