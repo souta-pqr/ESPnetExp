@@ -15,7 +15,7 @@ def calculate_detection_rate(text1_path, text2_path, output_path):
     # 出力ファイルを開く
     with open(output_path, 'w', encoding='utf-8') as out_file:
         # 詳細出力用のファイルを開く
-        with open("detection_rate_detail.txt", 'w', encoding='utf-8') as detail_file:
+        with open("f_d_detection_rate_detail.txt", 'w', encoding='utf-8') as detail_file:
             # 各文ごとにFとDの検出率を計算
             sentence_pattern = r'(\w+_\w+_\w+_\w+)\s'
             sentences1 = re.split(sentence_pattern, text1)
@@ -214,8 +214,8 @@ def align_words(ref_words, hyp_words):
     return alignment
 
 # 正解文と音声認識文のテキストファイルのパスを指定
-text1_path = "REF/text"
-text2_path = "HYP/text"
-output_path = "detection_rate.txt"
+text1_path = "REF/f_d/text"
+text2_path = "HYP/f_d/text"
+output_path = "f_d_detection_rate.txt"
 
 calculate_detection_rate(text1_path, text2_path, output_path)
