@@ -1,13 +1,22 @@
 import re
 
 def process_line(line):
-    # +Wのパターン
-    plus_w_pattern = r'\+F'
+    # +F と +D のグループを見つけるパターン
+    pattern = r'(\S+(?:\+[LW])+)'
     
-    # +Wを削除
-    processed_line = re.sub(plus_w_pattern, '', line)
-    # 連続する空白を1つにまとめる
-    processed_line = re.sub(r'\s+', ' ', processed_line)
+    def replace_tags(match):
+        word = match.group(1)
+        base = word.rstrip('LW+')
+        tags = re.findall(r'\+([LW])', word)
+        
+        result = base
+        for tag in tags:
+            result = f'<{tag}> {result} </{tag}>'
+        
+        return result
+    
+    # パターンを置換
+    processed_line = re.sub(pattern, replace_tags, line)
     
     return processed_line.strip()
 
