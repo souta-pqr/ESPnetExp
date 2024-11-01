@@ -2,8 +2,8 @@ import re
 
 def process_line(line):
     # 笑いのパターンと+Lのパターン
-    laughter_pattern = r'\(D\)\s*([^(/]+)\s*\(/D\)'
-    plus_l_pattern = r'\+D'
+    laughter_pattern = r'\(F\)\s*([^(/]+)\s*\(/F\)'
+    plus_l_pattern = r'\+F'
     
     # 笑いのパターンを削除し、内容のみを残す
     processed_line = re.sub(laughter_pattern, r'\1', line)

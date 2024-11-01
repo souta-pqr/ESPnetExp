@@ -1,7 +1,7 @@
 import re
 
 # 笑いのパターン
-laughter_pattern = r'\(I\)\s*([^(/]+)\s*\(/I\)'
+laughter_pattern = r'\(F\)\s*([^(/]+)\s*\(/F\)'
 
 # ファイルを読み込む
 with open('text', 'r', encoding='utf-8') as file:
