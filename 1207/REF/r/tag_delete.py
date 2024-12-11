@@ -5,7 +5,7 @@ with open('text', 'r') as file:
 
 changed_lines = []
 for line in lines:
-    changed_line = re.sub(r'\(([^)]+)\s+F\)', r'\1', line)
+    changed_line = re.sub(r'\(([^)]+)\s+I\)', r'\1', line)
     changed_lines.append(changed_line)
 
 with open('changed_text', 'w') as file:
