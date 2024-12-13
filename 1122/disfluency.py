@@ -3,9 +3,9 @@ import re
 def calculate_detection_rate(text1_path, text2_path, output_path):
     # テキストファイルを読み込む
     with open(text1_path, 'r', encoding='utf-8') as f:
-        text1 = f.read()
+        text1 = f.read()  # REFファイル（正解文）
     with open(text2_path, 'r', encoding='utf-8') as f:
-        text2 = f.read()
+        text2 = f.read()  # HYPファイル（認識文）
 
     # Dとカッコの間の文字列を抽出する正規表現パターン
     d_pattern = r'\<D\>\s*([^(/]+)\s*\</D\>'
@@ -16,8 +16,8 @@ def calculate_detection_rate(text1_path, text2_path, output_path):
         with open("d_detection_rate_detail.txt", 'w', encoding='utf-8') as detail_file:
             # 各文ごとにDの検出率を計算
             sentence_pattern = r'(\w+_\w+_\w+_\w+)\s'
-            sentences1 = re.split(sentence_pattern, text1)
-            sentences2 = re.split(sentence_pattern, text2)
+            sentences1 = re.split(sentence_pattern, text1)  # REF
+            sentences2 = re.split(sentence_pattern, text2)  # HYP
 
             total_d_ref_count = 0
             total_d_hyp_count = 0
@@ -30,12 +30,12 @@ def calculate_detection_rate(text1_path, text2_path, output_path):
 
             for i in range(1, len(sentences1), 2):
                 sentence_id = sentences1[i]
-                sentence1 = sentences1[i+1]
-                sentence2 = sentences2[i+1]
+                sentence1 = sentences1[i+1]  # REF
+                sentence2 = sentences2[i+1]  # HYP
 
                 # 正解文と音声認識文からDの単語を抽出
-                d_ref_words = re.findall(d_pattern, sentence1)
-                d_hyp_words = re.findall(d_pattern, sentence2)
+                d_ref_words = re.findall(d_pattern, sentence1)  # REFからの抽出
+                d_hyp_words = re.findall(d_pattern, sentence2)  # HYPからの抽出
 
                 # DPを使ってアライメントを取得
                 d_alignment = align_words(d_ref_words, d_hyp_words)
@@ -62,8 +62,8 @@ def calculate_detection_rate(text1_path, text2_path, output_path):
 
                 # 結果を出力ファイルに書き込む
                 out_file.write(f"{sentence_id}\n")
-                out_file.write(f"REF: {sentence1}")
-                out_file.write(f"HYP: {sentence2}")
+                out_file.write(f"REF: {sentence1}")  # REF（正解文）
+                out_file.write(f"HYP: {sentence2}")  # HYP（認識文）
                 out_file.write(f"言い直しの検出率 - Precision: {d_precision:.2f}%, Recall: {d_recall:.2f}%, F1: {d_f1:.2f}%\n")
                 out_file.write(f"言い直しの検出率 (緩和) - Precision: {d_precision_relaxed:.2f}%, Recall: {d_recall_relaxed:.2f}%, F1: {d_f1_relaxed:.2f}%\n")
                 out_file.write(f"言い直しの脱落誤り数: {d_deletion_count}, 挿入誤り数: {d_insertion_count}\n")
@@ -72,8 +72,8 @@ def calculate_detection_rate(text1_path, text2_path, output_path):
 
                 # 詳細出力用のファイルに書き込む
                 detail_file.write(f"{sentence_id}\n")
-                detail_file.write(f"REF: {sentence1}")
-                detail_file.write(f"HYP: {sentence2}")
+                detail_file.write(f"REF: {sentence1}")  # REF（正解文）
+                detail_file.write(f"HYP: {sentence2}")  # HYP（認識文）
 
                 detail_file.write("言い直しのマッチング:\n")
                 for ref, hyp in d_alignment:
@@ -153,9 +153,9 @@ def align_words(ref_words, hyp_words):
     alignment.reverse()
     return alignment
 
-# 正解文と音声認識文のテキストファイルのパスを指定
-text1_path = "HYP/d/text"
-text2_path = "REF/d/text"
+# 正解文と音声認識文のテキストファイルのパスを指定（順序を修正）
+text1_path = "REF/d/text"  # 正解文（REF）
+text2_path = "HYP/d/text"  # 認識文（HYP）
 output_path = "d_detection_rate.txt"
 
 calculate_detection_rate(text1_path, text2_path, output_path)
