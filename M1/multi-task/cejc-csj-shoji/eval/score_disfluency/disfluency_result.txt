@@ -1,0 +1,39 @@
+==================================================
+Disfluency Detection Evaluation Results
+==================================================
+
+Dataset Statistics:
+  Total utterances (ref): 40524
+  Total utterances (hyp): 40524
+  Matched utterances: 40524
+  Total tokens evaluated: 488633
+
+Overall Accuracy: 0.7546
+
+Per-Class Results:
+----------------------------------------------------------------------
+Class        Precision  Recall     F1-Score   Support   
+----------------------------------------------------------------------
+Fluent       0.9261     0.8077     0.8629     432860    
+Filler       0.0611     0.0555     0.0581     30079     
+Repetition   0.0000     0.0000     0.0000     6675      
+Interjection 0.2076     0.9150     0.3384     19019     
+----------------------------------------------------------------------
+Macro avg                          0.3149     488633    
+Weighted avg                       0.7812     488633    
+
+Confusion Matrix:
+--------------------------------------------------
+Predicted ->   0(Flu)  1(Fil)  2(Rep)  3(Int)  
+Actual ↓
+0(Fluent  )  349633   25306    0        57921    
+1(Filler  )  21386    1668     0        7025     
+2(Repetiti)  4883     322      0        1470     
+3(Interjec)  1613     4        0        17402    
+
+Label Distribution:
+------------------------------
+Fluent: Ref=432860 (88.6%), Hyp=377515 (77.3%)
+Filler: Ref=30079 (6.2%), Hyp=27300 (5.6%)
+Repetition: Ref=6675 (1.4%), Hyp=0 (0.0%)
+Interjection: Ref=19019 (3.9%), Hyp=83818 (17.2%)
