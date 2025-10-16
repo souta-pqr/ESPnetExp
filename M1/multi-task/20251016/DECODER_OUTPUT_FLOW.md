@@ -376,9 +376,6 @@ probs = F.softmax(logits, dim=-1)
 
 # 例: disfluency_logits[0, 17, 4, :]
 # = フレーム17, 文字位置4 "エ" での補助情報予測 (4次元)
-# = [1.2, 8.5, 0.8, 1.1]
-#    ↑    ↑    ↑    ↑
-#  fluent filler rep other
 ```
 
 **補助情報予測の具体例**
@@ -510,87 +507,91 @@ def forward(
         # blankフレーム(-100)と文字フレーム(0 or 1)が交互に現れる
 ```
 
-### 4.3 Frame-level Prediction
+### 4.3 Alignment Selection
 
 ```python
-    # ステップ4: Disfluency logits を Frame-level に変換
+    # ステップ4: Viterbiアライメントを使った正確な予測選択
     # disfluency_logits: (B=2, T=75, U=15, 4)
+    # frame_level_labels: (B=2, T=75) - Viterbiで得られたラベル
+    # frame_to_char_idx: (B=2, T=75) - 各フレームに対応する文字位置
     
-    # 方法: 文字次元 (U) で平均 pooling
-    frame_disfluency_logits = disfluency_logits.mean(dim=2)
-    # frame_disfluency_logits: (B=2, T=75, 4)
+    # 各フレームに対応する文字位置の予測だけを選択
+    valid_mask = frame_to_char_idx >= 0  # blank/padding 以外
+    
+    # インデックステンソルを準備
+    batch_idx = torch.arange(B)[:, None].expand(B, T)[valid_mask]
+    frame_idx = torch.arange(T)[None, :].expand(B, T)[valid_mask]
+    char_idx = frame_to_char_idx[valid_mask]
+    
+    # 対応する予測を抽出
+    selected_logits = disfluency_logits[batch_idx, frame_idx, char_idx, :]
+    # selected_logits: (N_valid, 4) - N_valid は有効なフレーム数
+    
+    selected_labels = frame_level_labels[valid_mask]
+    # selected_labels: (N_valid,)
 ```
 
-**Frame-level Logits の意味**
+**Alignment Selection の意味**
 ```python
-# frame_disfluency_logits[b, t, :] = バッチb, フレームt での補助情報予測
 
-# サンプル0, フレーム25 での予測 (フィラー "エ" の領域):
-logits = frame_disfluency_logits[0, 25, :]  # (4,)
-# = mean(disfluency_logits[0, 25, :, :])  # 全15文字位置で平均
-# = [1.2, 8.5, 0.8, 1.1]
-#    ↑    ↑    ↑    ↑
-#  fluent filler rep interjection
+# サンプル0, フレーム25 での例:
+# Viterbiアライメント: frame_to_char_idx[0, 25] = 4 ("エ")
+# 選択される予測: disfluency_logits[0, 25, 4, :]
+logits = [1.0, 8.5, 0.8, 1.0]
+#         ↑    ↑    ↑    ↑
+#      fluent filler rep interjection
+# Ground Truth: frame_level_labels[0, 25] = 1 (filler)
+# 予測: argmax = 1 
 
-# Ground Truth: frame_level_labels[0, 25] = 1 (filler) - "エ"のフレーム
-# 予測: argmax = 1 → 正しく検出！
-
-# サンプル0, フレーム10 での予測
-logits = frame_disfluency_logits[0, 10, :]  # (4,)
-# = [8.2, 1.1, 0.6, 0.8]
-#    ↑    ↑    ↑    ↑
-#  fluent filler rep interjection
-
-# Ground Truth: frame_level_labels[0, 10] = 0 (fluent) - "ョ"のフレーム
-# 予測: argmax = 0 → 正しい！
+# サンプル0, フレーム10 での例:
+# Viterbiアライメント: frame_to_char_idx[0, 10] = 1 ("ョ")
+# 選択される予測: disfluency_logits[0, 10, 1, :]
+logits = [8.2, 1.1, 0.6, 0.8]
+#         ↑    ↑    ↑    ↑
+#      fluent filler rep interjection
+# Ground Truth: frame_level_labels[0, 10] = 0 (fluent)
+# 予測: argmax = 0
 ```
 
 ### 4.4 Cross-Entropy Loss (補助情報)
 
 ```python
     # ステップ5: Cross-Entropy Loss
+    # selected_logits: (N_valid, 4) - 有効なフレームの予測のみ
+    # selected_labels: (N_valid,) - 対応するラベル
     
-    # Reshape
-    B, T, C = frame_disfluency_logits.shape  # (2, 75, 4)
-    frame_logits_flat = frame_disfluency_logits.reshape(-1, C)  # (150, 4)
-    frame_labels_flat = frame_level_labels.reshape(-1)          # (150,)
-    
-    # Cross-Entropy (ignore_index=-100 でblank除外)
+    # Cross-Entropy Loss
     disfluency_loss = F.cross_entropy(
-        frame_logits_flat,   # (150, 4)
-        frame_labels_flat,   # (150,)
-        ignore_index=-100,
-        reduction='mean',
+        selected_logits,   # (N_valid, 4)
+        selected_labels,   # (N_valid,)
+        # ignore_index は不要（既にフィルタ済み）
     )
-    # disfluency_loss: スカラー (例: 0.35)
+    # disfluency_loss: スカラー (例: 0.28)
 ```
 
 **具体的な損失計算**
 ```python
-# サンプル0, フレーム25 (フィラー "エ" のフレーム)
-logits = frame_logits_flat[25, :]  # [1.2, 8.5, 0.8, 1.1]
-label = frame_labels_flat[25]       # 1 (filler)
+# selected_logits には有効なフレームの予測のみが含まれる
 
-probs = F.softmax(logits, dim=-1)   # [0.018, 0.963, 0.012, 0.007]
-loss_t = -log(probs[1])             # -log(0.963) = 0.0377
+# 例: N_valid = 60 (75フレーム中、15フレームがblank)
 
-# サンプル0, フレーム5 ("キ" のフレーム)
-logits = frame_logits_flat[5, :]    # [8.2, 1.1, 0.6, 0.8]
-label = frame_labels_flat[5]        # 0 (fluent)
-
+# インデックス0: フレーム5, 文字1 "ョ" (fluent)
+logits = selected_logits[0, :]  # [8.2, 1.1, 0.6, 0.8]
+label = selected_labels[0]      # 0 (fluent)
 probs = F.softmax(logits, dim=-1)   # [0.9985, 0.0008, 0.0003, 0.0004]
-loss_t = -log(probs[0])             # -log(0.9985) = 0.0015
+loss_0 = -log(probs[0])             # -log(0.9985) = 0.0015
 
-# サンプル0, フレーム30 (フィラー "ー" のフレーム)
-logits = frame_logits_flat[30, :]   # [1.3, 8.7, 0.7, 1.0]
-label = frame_labels_flat[30]       # 1 (filler)
+# インデックス15: フレーム25, 文字4 "エ" (filler)
+logits = selected_logits[15, :]  # [1.0, 8.5, 0.8, 1.0]
+label = selected_labels[15]      # 1 (filler)
+probs = F.softmax(logits, dim=-1)   # [0.018, 0.963, 0.012, 0.007]
+loss_15 = -log(probs[1])            # -log(0.963) = 0.0377
 
+# インデックス20: フレーム30, 文字5 "ー" (filler)
+logits = selected_logits[20, :]  # [1.1, 8.7, 0.7, 1.0]
+label = selected_labels[20]      # 1 (filler)
 probs = F.softmax(logits, dim=-1)   # [0.016, 0.968, 0.009, 0.007]
-loss_t = -log(probs[1])             # -log(0.968) = 0.0325
-
-# 全フレーム(ignoreを除く)の平均
-# disfluency_loss ≈ (0.0377 + 0.0015 + 0.0325 + ...) / num_valid_frames
-# 各文字のフレームごとに損失が計算され、平均される
+loss_20 = -log(probs[1])            # -log(0.968) = 0.0325
 ```
 
 ### 4.5 総合損失
@@ -715,6 +716,7 @@ def detect_disfluency_inference(
     self,
     encoder_out: torch.Tensor,  # (1, T=75, 256)
     best_hyp: Hypothesis,       # Best hypothesis from beam search
+    ctc_logits: torch.Tensor,   # (1, T=75, vocab_size) for Viterbi
 ) -> List[int]:
     """
     推論時の補助情報検出
@@ -725,30 +727,62 @@ def detect_disfluency_inference(
     # labels = [23, 45, 12, 67, 8, 9, 15, 33, 33, 55, 67, 23, 89, 102, 78]
     # 15文字のID
     
-    # ステップ2: Decoder で decoder_out を計算
+    # ステップ2: Viterbi Alignment
     labels_tensor = torch.tensor([labels], device=encoder_out.device)
+    log_probs = F.log_softmax(ctc_logits, dim=-1)
+    
+    alignments = viterbi_alignment(
+        log_probs=log_probs,
+        targets=labels_tensor,
+        input_lengths=torch.tensor([encoder_out.size(1)]),
+        target_lengths=torch.tensor([len(labels)]),
+        blank_id=0,
+    )
+    # alignments: (1, T=75) - 各フレームがどの文字に対応するか
+    
+    # ステップ3: Decoder で decoder_out を計算
     decoder_out = self.decoder.batch_score(labels_tensor)
     # decoder_out: (1, U=15, 512)  # 15文字
     
-    # ステップ3: Joint Network
+    # ステップ4: Joint Network
     joint_outputs = self.joint_network(encoder_out, decoder_out)
     disfluency_logits = joint_outputs["disfluency_logits"]
     # disfluency_logits: (1, T=75, U=15, 4)
     
-    # ステップ4: Character-level prediction
-    # 方法1: 時間軸で平均
-    char_level_logits = disfluency_logits.mean(dim=1)  # (1, U=15, 4)
+    # ステップ5: Alignment Character-level prediction
+    # 各文字について、対応するフレームの予測を集約
+    char_level_preds = []
     
-    # 方法2: Viterbi alignmentを使って対応フレームの予測を集約
-    # (より正確だが計算コストが高い)
+    for u in range(len(labels)):
+        # この文字に対応するフレームを探す
+        char_frames = (alignments[0, :] == u).nonzero(as_tuple=True)[0]
+        
+        if len(char_frames) > 0:
+            # その文字に対応するフレームの予測を使用
+            # disfluency_logits[0, char_frames, u, :] の平均
+            frame_preds = disfluency_logits[0, char_frames, u, :].mean(dim=0)  # (4,)
+            char_level_preds.append(frame_preds.argmax().item())
+        else:
+            # 対応するフレームがない場合（稀）
+            char_level_preds.append(0)  # デフォルト: fluent
     
-    # ステップ5: Argmax で予測
-    disfluency_preds = char_level_logits.argmax(dim=-1)  # (1, U=15)
-    disfluency_labels = disfluency_preds.squeeze(0).tolist()
     # disfluency_labels = [0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]
     #                     [キ,ョ,ウ,ワ,エ,ー,ト,イ,イ,テ,ン,キ,デ,ス,ネ]
     
-    return disfluency_labels
+    return char_level_preds
+```
+
+**推論時の方式の利点**
+```python
+# 例: 文字4 "エ" (filler) の予測
+
+# Viterbiアライメント結果:
+# alignments[0, :] = [..., -1, 3, 3, 3, -1, 4, 4, 4, 4, 4, 4, -1, 5, 5, ...]
+#                                        ↑ 文字4 "エ" に対応するフレーム
+# フレーム21-26 が文字4に対応
+
+# 予測結果:
+# 平均: [1.2, 8.5, 0.8, 1.0] → argmax = 1 (filler)
 ```
 
 **推論結果の例**
@@ -759,7 +793,6 @@ def detect_disfluency_inference(
 # ASR結果:
 best_hyp.yseq = [23, 45, 12, 67, 8, 9, 15, 33, 33, 55, 67, 23, 89, 102, 78]
 text = ["キ", "ョ", "ウ", "ワ", "エ", "ー", "ト", "イ", "イ", "テ", "ン", "キ", "デ", "ス", "ネ"]
-#       今   日         は    え   ー  と   良   い   天   気         で   す  ね
 
 # 補助情報検出結果（文字レベル）:
 disfluency_labels = [0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -772,9 +805,9 @@ disfluency_labels = [0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]
 ョ    | fluent       | 日
 ウ    | fluent       | 
 ワ    | fluent       | は
-エ    | filled_pause | え
-ー    | filled_pause | ー  ← フィラー検出
-ト    | filled_pause | と
+エ    | filler       | え
+ー    | filler       | ー 
+ト    | filler       | と
 イ    | fluent       | 良
 イ    | fluent       | い
 テ    | fluent       | 天
@@ -832,13 +865,20 @@ joint_out:    (B, T, U, 1024)  # 全組み合わせの統合表現 (T=75, U=15)
 │    └─ Forward-backward で全アライメントパスを計算
 │       各文字が適切なフレームに割り当てられるよう学習
 │
-└─ [CE Loss + Viterbi]
-   ├─ Viterbi: ctc_logits → frame_level_labels (B, T)
+└─ [CE Loss + Viterbi + Alignment Selection]
+   ├─ Viterbi: ctc_logits → frame_level_labels, frame_to_char_idx
    │   文字レベルラベルをフレームレベルにマッピング
-   │   例: "エ"(filler) → フレーム21-26が全てfiller
-   ├─ Pooling: disfluency_logits → frame_logits (B, T, 4)
-   │   15文字位置で平均pooling
-   ├─ CE Loss: frame_logits vs frame_level_labels
+   │   frame_level_labels (B, T): 各フレームのdisfluencyラベル
+   │   frame_to_char_idx (B, T): 各フレームに対応する文字位置
+   │   例: "エ"(filler) → フレーム21-26が全てfiller, 文字位置4
+   │
+   ├─ Alignment Selection:
+   │   disfluency_logits (B, T, U, 4) から対応する文字位置の予測のみを選択
+   │   frame_to_char_idx を使って正確な予測を抽出
+   │   selected_logits (N_valid, 4): 有効なフレームの予測のみ
+   │  
+   │
+   ├─ CE Loss: selected_logits vs selected_labels
    └─ output: disfluency_loss (scalar)
 
 ↓ [Total Loss]
@@ -886,13 +926,15 @@ encoder_out → Beam Search → best_hypothesis
 - ASR: RNN-T Loss (文字単位 sequence-to-sequence)
 - Disfluency: CE Loss (frame-level classification with character-level labels)
 
-### 4. **Viterbi の役割**
+### 4. **Viterbi Alignment の重要な役割**
 - CTC logits で最適アライメント
 - Character-level → Frame-level 変換
 - 各文字のフレーム範囲を決定（例: "エ"→フレーム21-26）
 - 補助情報の教師信号を全フレームに提供
+- **NEW**: 各フレームに対応する文字位置も記録（frame_to_char_idx）
 
 ### 5. **推論の2段階**
 1. Beam Search で ASR 結果（文字単位）
-2. Joint Network で補助情報検出
+2. Viterbi Alignment で各文字に対応するフレームを特定
+3. 対応するフレームの予測を集約して補助情報検出
 
